@@ -1,0 +1,8 @@
+# ローカル環境固有の設定（個人パス・権限設定を含むため公開しない）
+opencode.json
+
+# OS / エディタ
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
