@@ -1426,22 +1426,6 @@
       });
     }
 
-    // Linux版Chrome向け: 実際にセッションを生成して利用可否を確認する
-    // （availability() が "unavailable" を返しても create() が成功するケースがあるため）
-    async function probeSession() {
-      if (!lmAPI) return { ok: false, error: "Prompt API が見つかりません" };
-      let session = null;
-      try {
-        session = await lmAPI.create({ monitor: monitorDownload });
-        if (!session) throw new Error("セッションの生成に失敗しました");
-        return { ok: true };
-      } catch (err) {
-        return { ok: false, error: String(err?.message || err) };
-      } finally {
-        try { session?.destroy?.(); } catch { /* 無視 */ }
-      }
-    }
-
     async function checkAvailability() {
       try {
         lmAPI = (typeof LanguageModel !== "undefined")
@@ -1472,31 +1456,11 @@
           setStatus("モデルのダウンロードが必要です。緑のボタンを押してください。");
           els.downloadBtn.style.display = "block";
           els.downloadBtn.disabled = false;
-        } else if (availability === "unavailable") {
-          // Linux版Chromeでは、OS/ハードウェア判定のタイミングにより
-          // availability() が "unavailable" を返しても実際には利用可能な場合がある。
-          // そのため、実際にセッションを生成できるかどうかをプローブで確認する。
-          setStatus("環境を確認中（プローブテスト）...");
-          const probeOk = await probeSession();
-          if (probeOk.ok) {
-            enableModel();
-          } else {
-            // プローブも失敗した場合は、Linux版Chrome向けの対処法を案内する
-            throw new Error(
-              "この端末では利用できません (判定: unavailable)" +
-              "\n【Linux版Chromeの場合の対処法】" +
-              "\n・chrome://flags で「Prompt API for Gemini Nano」と「Optimization Guide On-Device Model」を Enabled にして再起動" +
-              "\n・https または localhost でページを開く必要があります（file:// では動作しません）" +
-              "\n・プローブのエラー: " + probeOk.error
-            );
-          }
         } else {
           throw new Error(`この端末では利用できません (判定: ${availability})`);
         }
       } catch (err) {
-        const detail = String(err?.message || err);
-        console.error("モデル利用可否の判定に失敗しました:", detail);
-        setStatus(`エラー: ${detail.replace(/\n/g, " ")}`, true);
+        setStatus(`エラー: ${err.message}`, true);
       }
     }
 
