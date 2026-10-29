@@ -7,6 +7,8 @@ Chrome に内蔵された **Gemini Nano（Prompt API）** とチャットする�
 - 生成の停止・回答の再生成・Markdown / JSON エクスポート
 - システムプロンプトと温度（temperature）の設定
 
+![アプリのスクリーンショット](attachment/screenshot.png)
+
 ---
 
 ## 1. 動作環境
