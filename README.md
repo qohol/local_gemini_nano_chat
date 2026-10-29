@@ -11,14 +11,28 @@ Chrome に内蔵された **Gemini Nano（Prompt API）** とチャットする�
 
 ## 1. 動作環境
 
-| 項目 | 要件 |
-| --- | --- |
+| 項目   | 要件                                                  |
+| ---- | --------------------------------------------------- |
 | ブラウザ | Google Chrome（Gemini Nano / Prompt API が利用可能なバージョン） |
-| モデル | Gemini Nano（初回は数 GB のダウンロードが必要） |
-| 外部通信 | 初回のみ CDN から `marked` と `DOMPurify` を取得（以降はキャッシュ） |
-| 保存先 | `localStorage`（ブラウザ内） |
+| モデル  | Gemini Nano（==🔴**初回は約1.5GB〜2GB のダウンロードが必要**==）     |
+| 外部通信 | 初回のみ CDN から `marked` と `DOMPurify` を取得（以降はキャッシュ）    |
+| 保存先  | `localStorage`（ブラウザ内）                               |
 
 Prompt API が無効な場合は `chrome://flags` で該当フラグ（例: *Prompt API for Gemini Nano*）を有効化し、Chrome を再起動してください。詳細は Chrome のドキュメントを参照してください。
+
+---
+### 有効にすべき（Enable）フラグ
+Gemini Nanoを動かすために直接関わるフラグは以下の通りです。まず最低限、**Prompt API** を `Enabled` に設定してください。
+- [ ] **Prompt API**：Gemini Nanoの機能を有効化する**最も基本かつ必須のフラグ**です。
+- [ ] **Prompt API Multimodal Input**：画像や音声などのマルチモーダル入力を扱いたい場合に有効にします。
+- [ ] **Prompt API Tool Use**：モデルに外部ツールや関数（Function Calling）を使わせたい場合に有効にします。
+- [ ] **Prompt API Sampling Mode**：生成時のサンプリング設定（温度パラメータなど）を調整したい場合に有効にします。
+- [ ] **Gemma 4 for Built-in AI** / **Speculative Decoding for Built-in AI**：内蔵モデルの挙動最適化や推論の高速化に関連するオプションです。基本的には **Prompt API** を有効にすれば動作しますが、必要に応じて併用します。
+### 「Default」となっている場合の扱い
+Chromeの `chrome://flags` における **「Default」** は、実験段階の機能においては実質的に **「Disable（無効）」** として扱われます。 実験的機能はまだ標準の機能として組み込まれていないため、自動的に有効になることはありません。そのため、これらの機能を使用するには、必ず手動で **「Enabled」** に変更する必要があります。
+### 実装・設定時の注意点
+- フラグを変更した後は、Chromeを**完全に再起動**させる必要があります（タブを閉じるだけでなく、バックグラウンドのプロセスも含めて完全に終了させてから立ち上げ直してください）。
+- 初回利用時には、バックグラウンドでGemini Nanoのモデルデータ（約1.5GB〜2GB）が自動ダウンロードされます。通信環境と十分なディスク空き容量を確保しておいてください。
 
 ---
 
@@ -82,6 +96,7 @@ state = {
 - 保存は 250ms のデバウンス（`saveState()`）。`beforeunload` で即時確定。
 - 読み込み時に `normalizeThread()` で型・欠損値を補正し、スレッドが 0 件なら自動作成。
 - 容量超過時はステータスバーにエラーを表示（`localStorage` は約 5MB 上限）。
+- 実際のファイルシステム上の保存先は **[6. データの保存場所](#6-データの保存場所実際のパス)** を参照。
 
 ### 3.3 セッション管理（スレッドごとに 1 セッション）
 
@@ -190,7 +205,52 @@ Prompt API のセッションは会話状態を内部に持つため、`sessionC
 
 ---
 
-## 6. ファイル構成
+## 6. データの保存場所（実際のパス）
+
+本アプリは **単一の `index.html` で完結し、独自のデータフォルダを持ちません**。すべて Chrome（ブラウザ）の管理下に保存されます。
+
+### 6.1 スレッド・過去ログ（会話履歴）
+
+| データ | 保存場所 | 実際のパス（Windows 例） |
+| --- | --- | --- |
+| スレッド一覧・メッセージ全文 | `localStorage`（キー: `localGeminiNanoChat.state.v1`） | `C:\Users\<ユーザー名>\AppData\Local\Google\Chrome\User Data\Default\Local Storage\leveldb\` |
+| システムプロンプト・温度 | `localStorage`（キー: `localGeminiNanoChat.settings.v1`） | 同上 |
+
+> ※ `Local Storage\leveldb\` は Chrome が `file://` オリジンの `localStorage` を管理する LevelDB フォルダです。**直接編集はしないでください**（バックアップは本アプリの JSON エクスポートを使用）。ポート番号付き `file://` URL や `http://localhost` で開いた場合はオリジンが変わるため、スレッドは共有されません。
+
+プロファイルを分けている場合（`Default` 以外）、対応する `Profile N` フォルダ配下になります。
+
+### 6.2 セッションキャッシュ（生成中の会話状態）
+
+- Prompt API のセッション（`sessionCache: Map<threadId, { session, key }>`）は**メモリ上のみ**に存在します。
+- タブを閉じる・再読み込みすると破棄され、次回は `localStorage` の履歴からセッションを再構築します（直近 12 件を `initialPrompts` に渡す）。
+- ファイルシステム上には保存されません。
+
+### 6.3 Gemini Nano モデルの実体
+
+モデルは Chrome の「オプティマイザーガイド」機構で端末にダウンロードされ、以下に配置されます（保存・更新はすべて Chrome が管理）
+
+- `C:\Users\<ユーザー名>\AppData\Local\Google\Chrome\User Data\optimization_guide_model_store\`
+
+※ 本アプリからは見えません。削除は `chrome://components`（Foundation Model / Optimization Guide On Device Model）または Chrome の設定から行ってください。
+
+### 6.4 エクスポート先
+
+| 出力 | 形式 | 保存先 |
+| --- | --- | --- |
+| ヘッダー ⤓（スレッド書き出し） | Markdown (`.md`) | Chrome の既定のダウンロードフォルダ（例: `C:\Users\<ユーザー名>\Downloads\`） |
+| ⚙ 設定「全履歴をJSON保存」 | JSON (`.json`) | 同上 |
+
+### 6.5 CDN ライブラリのキャッシュ
+
+`marked` / `DOMPurify` は初回アクセス時に CDN から取得されます。
+
+- キャッシュ場所: `C:\Users\<ユーザー名>\AppData\Local\Google\Chrome\User Data\Default\Cache\` （Chrome の HTTP キャッシュ）
+- オフラインでも取得できれば動作し、取得できない場合は Markdown 装飾が簡易表示にフォールバックします。
+
+---
+
+## 7. ファイル構成
 
 ```
 .
@@ -201,6 +261,6 @@ Prompt API のセッションは会話状態を内部に持つため、`sessionC
 
 ---
 
-## 7. ライセンス
+## 8. ライセンス
 
 MIT License. 詳細は [LICENCE](LICENCE) を参照してください。

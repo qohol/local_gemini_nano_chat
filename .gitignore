@@ -6,3 +6,5 @@ opencode.json
 Thumbs.db
 .vscode/
 .idea/
+_old/
+.session/
