@@ -1,6 +1,6 @@
 # Local Gemini Nano Chat
 
-Chrome に内蔵された **Gemini Nano（Prompt API）** とチャットするための、単一 HTML ファイルのローカルチャットツールです。サーバーもビルドも不要で、会話はすべて端末内（ブラウザ）で完結します。
+Chrome に内蔵された **Gemini Nano（Prompt API）** とチャットするための、`index.html` + `app.js` の 2 ファイルで完結するローカルチャットツールです。サーバーもビルドも不要で、会話はすべて端末内（ブラウザ）で完結します。
 
 - スレッドを複数持てる／履歴は自動保存・切替可能
 - コードブロックに「コピー」ボタン
@@ -17,7 +17,7 @@ Chrome に内蔵された **Gemini Nano（Prompt API）** とチャットする�
 | ---- | --------------------------------------------------- |
 | ブラウザ | Google Chrome（Gemini Nano / Prompt API が利用可能なバージョン） |
 | モデル  | Gemini Nano（==🔴**初回は約1.5GB〜2GB のダウンロードが必要**==）     |
-| 外部通信 | 初回のみ CDN から `marked` と `DOMPurify` を取得（以降はキャッシュ）    |
+| 外部通信 | **なし**。スクリプト・スタイル・フォント・画像はすべてローカル（CSP で外部遮断済み） |
 | 保存先  | `localStorage`（ブラウザ内）                               |
 
 Prompt API が無効な場合は `chrome://flags` で該当フラグ（例: *Prompt API for Gemini Nano*）を有効化し、Chrome を再起動してください。詳細は Chrome のドキュメントを参照してください。
@@ -157,12 +157,11 @@ Prompt API のセッションは会話状態を内部に持つため、`sessionC
 
 エラーメッセージはセッション再構築時の `initialPrompts` から除外されます。
 
-### 3.7 Markdown とセキュリティ
+### 3.7 表示とセキュリティ
 
-- `marked` で Markdown を HTML 化し、**DOMPurify** でサニタイズしてから挿入（XSS 対策）。
-- `marked` / `DOMPurify` が読み込めない場合は、HTML エスケープ＋改行変換にフォールバック。
-- 外部リンクは `target="_blank" rel="noopener noreferrer"` を付与。
-- コードブロックは `pre > code` を「言語ラベル＋コピーボタン」付きの `.code-block` に置換して装飾。
+- **すべてのテキストは `textContent` 経由で描画**（`renderSafeText()`）。モデル出力・localStorage 由来など信頼できない文字列は HTML 化せず、改行と `` ``` `` コードブロック風の整形のみを行う。これにより XSS の入口を構造的に排除している。
+- 外部ライブラリ（`marked` / `DOMPurify`）は使用しない。
+- CSP（`<meta>` タグ）で `script-src 'self'` を適用。インラインスクリプトと外部スクリプトを禁止し、たとえ `innerHTML` 回帰が起きても CSP が最後の防線として機能する。
 
 ### 3.8 排他制御
 
@@ -203,13 +202,12 @@ Prompt API のセッションは会話状態を内部に持つため、`sessionC
 - 長い会話ではコンテキスト上限に達します。その場合は新しいスレッドを作成するか、履歴を削除してください（自動要約は未実装）。
 - 生成中はスレッドを切り替えられません。
 - モデルの品質・対応言語は Chrome に内蔵された Gemini Nano に依存します。
-- 起動時に CDN へ接続できない場合、Markdown 装飾は簡易表示（エスケープ＋改行）になります。
 
 ---
 
 ## 6. データの保存場所（実際のパス）
 
-本アプリは **単一の `index.html` で完結し、独自のデータフォルダを持ちません**。すべて Chrome（ブラウザ）の管理下に保存されます。
+本アプリは **`index.html` と `app.js` の 2 ファイルで完結し、独自のデータフォルダを持ちません**。すべて Chrome（ブラウザ）の管理下に保存されます。
 
 ### 6.1 スレッド・過去ログ（会話履歴）
 
@@ -243,23 +241,19 @@ Prompt API のセッションは会話状態を内部に持つため、`sessionC
 | ヘッダー ⤓（スレッド書き出し） | Markdown (`.md`) | Chrome の既定のダウンロードフォルダ（例: `C:\Users\<ユーザー名>\Downloads\`） |
 | ⚙ 設定「全履歴をJSON保存」 | JSON (`.json`) | 同上 |
 
-### 6.5 CDN ライブラリのキャッシュ
-
-`marked` / `DOMPurify` は初回アクセス時に CDN から取得されます。
-
-- キャッシュ場所: `C:\Users\<ユーザー名>\AppData\Local\Google\Chrome\User Data\Default\Cache\` （Chrome の HTTP キャッシュ）
-- オフラインでも取得できれば動作し、取得できない場合は Markdown 装飾が簡易表示にフォールバックします。
-
 ---
 
 ## 7. ファイル構成
 
 ```
 .
-├── index.html   # アプリ本体（HTML / CSS / JS をすべて内包）
+├── index.html   # 画面構成・スタイル（末尾で app.js を読み込む）
+├── app.js       # アプリ本体のロジック（JS 全部）
 ├── README.md    # 本ドキュメント
 └── LICENCE      # MIT ライセンス
 ```
+
+> ※ `app.js` は必ず `index.html` と同じ場所に置いてください。`app.js` が無い場合は管理 UI が表示されても動作しません。
 
 ---
 
